@@ -26,9 +26,6 @@ import comfy.memory_management
 import comfy.pinned_memory
 import comfy.utils
 
-import comfy_aimdo.model_vbar
-import comfy_aimdo.torch
-
 def run_every_op():
     if torch.compiler.is_compiling():
         return
@@ -98,14 +95,9 @@ def cast_bias_weight_with_vbar(s, dtype, device, bias_dtype, non_blocking, compu
     offload_stream = None
     xfer_dest = None
 
-    signature = comfy_aimdo.model_vbar.vbar_fault(s._v)
-    resident = comfy_aimdo.model_vbar.vbar_signature_compare(signature, s._v_signature)
-    if signature is not None:
-        if resident:
-            weight = s._v_weight
-            bias = s._v_bias
-        else:
-            xfer_dest = comfy_aimdo.torch.aimdo_to_tensor(s._v, device)
+    signature = None
+    resident = None
+    
 
     if not resident:
         cast_geometry = comfy.memory_management.tensors_to_geometries([ s.weight, s.bias ])
@@ -286,7 +278,6 @@ def uncast_bias_weight(s, weight, bias, offload_stream):
     device=None
     #FIXME: This is really bad RTTI
     if weight_a is not None and not isinstance(weight_a, torch.Tensor):
-        comfy_aimdo.model_vbar.vbar_unpin(s._v)
         device = weight_a
     if os is None:
         return
@@ -338,7 +329,6 @@ class disable_weight_init:
         def __init__(self, in_features, out_features, bias=True, device=None, dtype=None):
             # don't trust subclasses that BYO state dict loader to call us.
             if (not comfy.model_management.WINDOWS
-                or not comfy.memory_management.aimdo_enabled
                 or type(self)._load_from_state_dict is not disable_weight_init.Linear._load_from_state_dict):
                 super().__init__(in_features, out_features, bias, device, dtype)
                 return
@@ -361,7 +351,6 @@ class disable_weight_init:
                                 strict, missing_keys, unexpected_keys, error_msgs):
 
             if (not comfy.model_management.WINDOWS
-                or not comfy.memory_management.aimdo_enabled
                 or type(self)._load_from_state_dict is not disable_weight_init.Linear._load_from_state_dict):
                 return super()._load_from_state_dict(state_dict, prefix, local_metadata, strict,
                                                      missing_keys, unexpected_keys, error_msgs)
@@ -571,7 +560,6 @@ class disable_weight_init:
                      _freeze=False, device=None, dtype=None):
             # don't trust subclasses that BYO state dict loader to call us.
             if (not comfy.model_management.WINDOWS
-                or not comfy.memory_management.aimdo_enabled
                 or type(self)._load_from_state_dict is not disable_weight_init.Embedding._load_from_state_dict):
                 super().__init__(num_embeddings, embedding_dim, padding_idx, max_norm,
                                  norm_type, scale_grad_by_freq, sparse, _weight,
@@ -599,7 +587,6 @@ class disable_weight_init:
                                 strict, missing_keys, unexpected_keys, error_msgs):
 
             if (not comfy.model_management.WINDOWS
-                or not comfy.memory_management.aimdo_enabled
                 or type(self)._load_from_state_dict is not disable_weight_init.Embedding._load_from_state_dict):
                 return super()._load_from_state_dict(state_dict, prefix, local_metadata, strict,
                                                      missing_keys, unexpected_keys, error_msgs)
